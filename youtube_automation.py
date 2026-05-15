@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 """
-🎵 AI Music YouTube Automation (Complete Version)
-สร้างเพลง + ภาพ DALL-E + Video + Upload YouTube อัตโนมัติ
-ทำได้ 100% ต่อเนื่องทุกวัน
+🎵 AI Music YouTube Automation
+สร้างเพลง + ภาพ + Video + Upload YouTube
+ทำให้ใช้ได้ 100% (DALL-E + Placeholder fallback)
 """
 
 import os
 import json
-import time
 import requests
 from datetime import datetime
-from pathlib import Path
+from PIL import Image, ImageDraw
 import subprocess
 import sys
 
-# ===== CONCEPTS =====
 CONCEPTS = [
     {
         "id": 1,
@@ -23,9 +21,10 @@ CONCEPTS = [
         "genre": "Lo-fi",
         "mood": "Relaxing",
         "tempo": 75,
-        "description": "เพลง Lo-fi สำหรับคนทำงาน ช่วยให้จดจ่อและมีสมาธิ",
+        "description": "เพลง Lo-fi สำหรับคนทำงาน",
         "target": "คนทำงาน",
-        "dalle_prompt": "Lofi aesthetic morning office desk with coffee cup, warm lighting, peaceful cozy atmosphere, minimalist design, beautiful composition, 1024x576"
+        "color": "#FFD700",
+        "dalle_prompt": "Lofi aesthetic morning office desk with coffee cup, warm lighting, peaceful cozy atmosphere, minimalist design, 1024x576"
     },
     {
         "id": 2,
@@ -36,7 +35,8 @@ CONCEPTS = [
         "tempo": 75,
         "description": "เพลง Lo-fi ที่อบอุ่นสำหรับมิตรภาพ",
         "target": "มิตรภาพ",
-        "dalle_prompt": "Friends hanging out together at night lofi aesthetic, warm lighting, peaceful atmosphere, starry sky, cozy vibes, minimalist, beautiful, 1024x576"
+        "color": "#FF69B4",
+        "dalle_prompt": "Friends together at night lofi aesthetic, warm lighting, peaceful atmosphere, starry sky, cozy vibes, minimalist, 1024x576"
     },
     {
         "id": 3,
@@ -47,7 +47,8 @@ CONCEPTS = [
         "tempo": 75,
         "description": "เพลง Chill สำหรับนักศึกษา",
         "target": "นักศึกษา",
-        "dalle_prompt": "Student studying at desk with books, lofi aesthetic, warm desk lamp, peaceful study room, minimalist interior, beautiful composition, 1024x576"
+        "color": "#87CEEB",
+        "dalle_prompt": "Student studying at desk with books, lofi aesthetic, warm desk lamp, peaceful study room, minimalist interior, 1024x576"
     },
     {
         "id": 4,
@@ -58,91 +59,94 @@ CONCEPTS = [
         "tempo": 85,
         "description": "เพลง Chill สำหรับเดินเล่น",
         "target": "คนเดินเล่น",
+        "color": "#FF8C00",
         "dalle_prompt": "Person walking through city streets at sunset, urban lofi aesthetic, peaceful vibe, minimalist buildings, beautiful light, 1024x576"
     }
 ]
 
-# ===== API KEYS =====
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 YOUTUBE_CHANNEL_ID = os.getenv("YOUTUBE_CHANNEL_ID")
 
-# ===== FUNCTIONS =====
-
 def log(msg):
-    """Logger with timestamp"""
+    """Logger"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{timestamp}] {msg}", flush=True)
 
 def get_todays_concept():
-    """Select concept based on day of month"""
+    """Select concept by day"""
     day = datetime.now().day
     return CONCEPTS[day % len(CONCEPTS)]
 
+def create_placeholder_image(concept):
+    """Create beautiful placeholder image"""
+    log(f"🎨 Creating placeholder image...")
+    
+    try:
+        width, height = 1024, 576
+        img = Image.new('RGB', (width, height), color=concept['color'])
+        draw = ImageDraw.Draw(img)
+        
+        os.makedirs("output", exist_ok=True)
+        image_file = f"output/image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        img.save(image_file)
+        
+        log(f"✅ Placeholder image created: {image_file}")
+        return image_file
+    except Exception as e:
+        log(f"❌ Placeholder error: {e}")
+        return None
+
 def generate_image_dalle(prompt):
-    """Generate image using DALL-E (try dalle-3)"""
-    log(f"🎨 Generating DALL-E image...")
+    """Generate DALL-E image (no fallback to dalle-2)"""
+    log(f"🎨 Attempting DALL-E image...")
     
     if not OPENAI_API_KEY:
-        log("❌ OPENAI_API_KEY not set")
+        log("⚠️ OPENAI_API_KEY not set, using placeholder")
         return None
     
-    models = ["dall-e-3", "dall-e-2"]
-    
-    for model in models:
-        try:
-            log(f"   Trying {model}...")
+    try:
+        url = "https://api.openai.com/v1/images/generations"
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": "dall-e-3",
+            "prompt": prompt,
+            "n": 1,
+            "size": "1024x576"
+        }
+        
+        log(f"   Sending request to DALL-E 3...")
+        response = requests.post(url, json=payload, headers=headers, timeout=120)
+        
+        if response.status_code == 200:
+            data = response.json()
+            image_url = data['data'][0]['url']
             
-            url = "https://api.openai.com/v1/images/generations"
-            headers = {
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
-                "Content-Type": "application/json"
-            }
+            log(f"   Downloading image...")
+            img_response = requests.get(image_url, timeout=30)
             
-            size = "1024x576" if model == "dall-e-3" else "512x512"
+            os.makedirs("output", exist_ok=True)
+            image_file = f"output/image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
             
-            payload = {
-    "model": model,
-    "prompt": prompt,
-    "n": 1,
-    "size": size,
-    "quality": "standard" if model == "dall-e-3" else None
-}}
+            with open(image_file, 'wb') as f:
+                f.write(img_response.content)
             
-            # Remove None values
-            payload = {k: v for k, v in payload.items() if v is not None}
-            
-            response = requests.post(url, json=payload, headers=headers, timeout=120)
-            
-            if response.status_code == 200:
-                data = response.json()
-                image_url = data['data'][0]['url']
+            log(f"✅ DALL-E image created: {image_file}")
+            return image_file
+        else:
+            log(f"⚠️ DALL-E failed ({response.status_code})")
+            return None
                 
-                log(f"   Downloading image...")
-                img_response = requests.get(image_url, timeout=30)
-                
-                os.makedirs("output", exist_ok=True)
-                image_file = f"output/image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-                
-                with open(image_file, 'wb') as f:
-                    f.write(img_response.content)
-                
-                log(f"✅ DALL-E image created ({model}): {image_file}")
-                return image_file
-            else:
-                error_text = response.text[:200] if response.text else str(response.status_code)
-                log(f"   {model} failed: {error_text}")
-                continue
-                
-        except Exception as e:
-            log(f"   {model} exception: {str(e)[:100]}")
-            continue
-    
-    log("❌ All DALL-E models failed")
-    return None
+    except Exception as e:
+        log(f"⚠️ DALL-E exception: {str(e)[:100]}")
+        return None
 
 def create_music_file():
-    """Create 10-minute music file using ffmpeg"""
+    """Create 10-minute music file"""
     log("🎵 Creating music file...")
     
     os.makedirs("output", exist_ok=True)
@@ -164,15 +168,15 @@ def create_music_file():
         log(f"✅ Music file created: {music_file}")
         return music_file
     except Exception as e:
-        log(f"❌ Music creation error: {e}")
+        log(f"❌ Music error: {e}")
         return None
 
 def create_video(image_file, music_file):
-    """Create video: loop image + music"""
+    """Create video"""
     log(f"🎬 Creating video...")
     
     if not image_file or not music_file:
-        log("❌ Missing image or music")
+        log("❌ Missing files")
         return None
     
     os.makedirs("output", exist_ok=True)
@@ -201,7 +205,7 @@ def create_video(image_file, music_file):
         return None
 
 def generate_caption(concept):
-    """Generate YouTube caption"""
+    """Generate caption"""
     caption = f"""{concept['title']} | {concept['english']}
 
 {concept['description']}
@@ -224,14 +228,14 @@ def generate_caption(concept):
     return caption
 
 def save_metadata(video_file, concept, caption):
-    """Save YouTube metadata to JSON"""
+    """Save metadata"""
     log(f"💾 Saving metadata...")
     
     try:
         metadata = {
             "title": concept['title'],
             "description": caption,
-            "tags": ["lofi", "chillbeats", "studymusic", concept['genre'].lower()],
+            "tags": ["lofi", "chillbeats", "studymusic"],
             "categoryId": "10",
             "privacyStatus": "public",
             "video_file": video_file,
@@ -248,36 +252,37 @@ def save_metadata(video_file, concept, caption):
         return False
 
 def main():
-    """Main automation"""
+    """Main"""
     log("🚀 Starting AI Music Automation")
     log(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # Select concept
     concept = get_todays_concept()
     log(f"🎵 Concept: {concept['title']}")
     
-    # Generate image
+    # Try DALL-E first
     image_file = generate_image_dalle(concept['dalle_prompt'])
+    
+    # If DALL-E fails, use placeholder
     if not image_file:
-        log("❌ Failed to generate image")
+        log("⚠️ Using placeholder image")
+        image_file = create_placeholder_image(concept)
+    
+    if not image_file:
+        log("❌ Failed to create image")
         return False
     
-    # Create music
     music_file = create_music_file()
     if not music_file:
         log("❌ Failed to create music")
         return False
     
-    # Create video
     video_file = create_video(image_file, music_file)
     if not video_file:
         log("❌ Failed to create video")
         return False
     
-    # Generate caption
     caption = generate_caption(concept)
     
-    # Save metadata
     if not save_metadata(video_file, concept, caption):
         log("⚠️ Failed to save metadata")
     
