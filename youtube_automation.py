@@ -102,13 +102,12 @@ def generate_image_dalle(prompt):
             size = "1024x576" if model == "dall-e-3" else "512x512"
             
             payload = {
-                "model": model,
-                "prompt": prompt,
-                "n": 1,
-                "size": size,
-                "quality": "standard" if model == "dall-e-3" else None,
-                "style": "natural" if model == "dall-e-3" else None
-            }
+    "model": model,
+    "prompt": prompt,
+    "n": 1,
+    "size": size,
+    "quality": "standard" if model == "dall-e-3" else None
+}}
             
             # Remove None values
             payload = {k: v for k, v in payload.items() if v is not None}
