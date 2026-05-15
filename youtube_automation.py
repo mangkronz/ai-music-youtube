@@ -94,7 +94,7 @@ def generate_image_dalle(prompt):
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "dall-e-3",
+            "model": "dall-e-2",
             "prompt": prompt,
             "n": 1,
             "size": "1024x576"
