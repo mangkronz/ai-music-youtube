@@ -51,22 +51,3 @@ jobs:
           path: output/
           retention-days: 30
       
-      # Step 7: Send notification (optional)
-      - name: Send Slack notification
-        if: always()
-        uses: slackapi/slack-github-action@v1
-        with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
-          payload: |
-            {
-              "text": "✅ Daily AI Music Automation Completed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "🎵 AI Music YouTube Automation\n*Status:* Complete\n*Time:* ${{ job.status }}"
-                  }
-                }
-              ]
-            }
