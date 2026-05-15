@@ -29,10 +29,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       
       # Step 4: Install Python packages
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
+- name: Install dependencies
+  run: |
+    python -m pip install --upgrade pip
+    pip install requests Pillow
       
       # Step 5: Run automation script
       - name: Run AI Music Automation
