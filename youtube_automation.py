@@ -80,7 +80,7 @@ def get_todays_concept():
     return CONCEPTS[day % len(CONCEPTS)]
 
 def generate_image_dalle(prompt):
-    """Generate image using DALL-E (try dalle-3 first, then dalle-2)"""
+    """Generate image using DALL-E (try dalle-3)"""
     log(f"🎨 Generating DALL-E image...")
     
     if not OPENAI_API_KEY:
